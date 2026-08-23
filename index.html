@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Delivery Royale 3D - 4 Players Party</title>
+    <title>Delivery Royale 3D - Fixed Connection Lag</title>
     <!-- Three.js Engine & PeerJS -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
@@ -11,7 +11,7 @@
         * { box-sizing: border-box; margin: 0; padding: 0; touch-action: none; user-select: none; }
         body { background: #0b0f19; color: #fff; font-family: system-ui, -apple-system, sans-serif; overflow: hidden; }
         
-        /* 🎨 1. LOBBY & MENU OVERLAY */
+        /* 🎨 LOBBY & MENU OVERLAY */
         #lobbyOverlay {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background: rgba(11, 15, 25, 0.95); backdrop-filter: blur(8px);
@@ -39,7 +39,7 @@
         /* 👥 LOBBY PLAYER LIST */
         .lobby-players-box {
             background: #0d1117; border: 1px solid #30363d; border-radius: 10px;
-            padding: 8px 12px; max-height: 110px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px;
+            padding: 8px 12px; max-height: 100px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px;
         }
         .lobby-player-item {
             display: flex; justify-content: space-between; align-items: center;
@@ -53,7 +53,7 @@
         }
         .btn-action:disabled { background: #334155; color: #64748b; cursor: not-allowed; }
         
-        /* 🎮 2. IN-GAME HUD OVERLAY */
+        /* 🎮 IN-GAME HUD OVERLAY */
         #hudOverlay {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
             pointer-events: none; display: none; flex-direction: column;
@@ -87,17 +87,17 @@
             
             <div class="form-row">
                 <label>👤 ชื่อพนักงาน:</label>
-                <input type="text" id="inputName" value="Driver_1" maxlength="10" oninput="updateMyProfileLocal()">
+                <input type="text" id="inputName" value="Driver_1" maxlength="10">
             </div>
 
             <div class="config-grid">
                 <div class="form-row">
                     <label>🎨 สียูนิฟอร์ม:</label>
-                    <input type="color" id="inputColor" value="#38bdf8" oninput="updateMyProfileLocal()">
+                    <input type="color" id="inputColor" value="#38bdf8">
                 </div>
                 <div class="form-row">
                     <label>👑 หมวก 3D:</label>
-                    <select id="inputHat" onchange="updateMyProfileLocal()">
+                    <select id="inputHat">
                         <option value="none">ไม่ใส่</option>
                         <option value="crown">👑 มงกุฎ</option>
                         <option value="cap">🧢 หมวกแก๊ป</option>
@@ -106,20 +106,12 @@
                 </div>
             </div>
 
-            <!-- ตั้ง/สร้างรหัสห้องสำหรับ Host -->
+            <!-- สร้างห้องสำหรับ Host -->
             <div class="room-box">
                 <div style="font-size:0.75rem; color:#94a3b8; margin-bottom:4px;">ตั้งรหัสห้องของคุณ (4 หลัก):</div>
                 <div style="display:flex; gap:6px;">
-                    <input type="number" id="hostRoomCode" style="flex:1; text-align:center; font-size:1.1rem; font-weight:bold; color:#38bdf8;" placeholder="1234" maxlength="4">
-                    <button style="background:#0284c7; color:#fff; border:none; padding:0 12px; border-radius:8px; font-weight:bold; cursor:pointer;" onclick="changeRoomCode()">ตั้งรหัส ⚙️</button>
-                </div>
-            </div>
-
-            <!-- รายชื่อคนในห้อง -->
-            <div class="form-row">
-                <label>👥 ผู้เล่นในห้อง (<span id="playerCountText">1</span>/4 คน):</label>
-                <div class="lobby-players-box" id="lobbyPlayerList">
-                    <!-- Dynamic Joined Players -->
+                    <input type="number" id="hostRoomCode" style="flex:1; text-align:center; font-size:1.1rem; font-weight:bold; color:#38bdf8;" placeholder="1234" value="1234">
+                    <button style="background:#0284c7; color:#fff; border:none; padding:0 12px; border-radius:8px; font-weight:bold; cursor:pointer;" onclick="createHostRoom()">สร้างห้อง 👑</button>
                 </div>
             </div>
 
@@ -127,12 +119,20 @@
             <div class="form-row">
                 <label>🔑 เข้าร่วมห้องเพื่อน:</label>
                 <div style="display:flex; gap:6px;">
-                    <input type="number" id="inputJoinCode" placeholder="กรอกรหัสห้อง 4 หลัก" style="flex:1;">
+                    <input type="number" id="inputJoinCode" placeholder="กรอกรหัส 4 หลัก" style="flex:1;">
                     <button style="background:#2563eb; color:#fff; border:none; padding:0 16px; border-radius:8px; font-weight:bold; cursor:pointer;" onclick="joinRoom()">จอยห้อง 🚀</button>
                 </div>
             </div>
 
-            <div id="statusText" style="font-size:0.75rem; color:#f59e0b; text-align:center; font-weight:bold;">⏳ กำลังเชื่อมต่อระบบ...</div>
+            <!-- รายชื่อคนในห้อง -->
+            <div class="form-row">
+                <label>👥 ผู้เล่นในห้อง (<span id="playerCountText">0</span>/4 คน):</label>
+                <div class="lobby-players-box" id="lobbyPlayerList">
+                    <div style="font-size:0.75rem; color:#64748b; text-align:center;">กด "สร้างห้อง" หรือ "จอยห้อง" เพื่อเริ่ม</div>
+                </div>
+            </div>
+
+            <div id="statusText" style="font-size:0.75rem; color:#34d399; text-align:center; font-weight:bold;">🟢 พร้อมใช้งาน! เลือกสร้างห้องหรือจอยเพื่อนได้เลย</div>
 
             <button class="btn-action" id="btnStartGame" onclick="startGame()" disabled>🚀 เริ่มการแข่งขัน</button>
         </div>
@@ -158,7 +158,7 @@
     </div>
 
     <script>
-        const MAX_PLAYERS = 4; // ล็อกจำนวนผู้เล่นสูงสุดไว้ที่ 4 คน
+        const MAX_PLAYERS = 4;
 
         // 🎮 1. THREE.JS ENGINE SETUP
         const scene = new THREE.Scene();
@@ -202,7 +202,7 @@
         packageMesh.position.set(0, 0.6, 0);
         scene.add(packageMesh);
 
-        // 👑 2. 3D CHARACTER MESH BUILDER
+        // 👑 2. 3D CHARACTER BUILDER
         function createNameTag(text) {
             const canvas = document.createElement('canvas');
             canvas.width = 256; canvas.height = 64;
@@ -248,8 +248,8 @@
             return group;
         }
 
-        // 🕹️ 3. MULTI-PLAYER STATE & ROOM MANAGEMENT
-        let isHost = true;
+        // 🕹️ 3. MULTI-PLAYER STATE
+        let isHost = false;
         let myId = null;
         let connections = {}; 
         let guestConn = null; 
@@ -264,22 +264,15 @@
         let gameTimeSeconds = 180;
         let timerInterval = null;
 
-        let myProfile = { name: "Driver_1", color: "#38bdf8", hat: "none" };
+        const statusText = document.getElementById('statusText');
+        const btnStartGame = document.getElementById('btnStartGame');
 
-        function updateMyProfileLocal() {
-            myProfile.name = document.getElementById('inputName').value.trim() || "Driver";
-            myProfile.color = document.getElementById('inputColor').value;
-            myProfile.hat = document.getElementById('inputHat').value;
-
-            if (myId && players[myId]) {
-                players[myId].profile = myProfile;
-                if (isHost) {
-                    renderLobbyList();
-                    broadcastWorldState();
-                } else if (guestConn && guestConn.open) {
-                    guestConn.send({ type: 'UPDATE_PROFILE', profile: myProfile });
-                }
-            }
+        function getMyProfile() {
+            return {
+                name: document.getElementById('inputName').value.trim() || "Driver",
+                color: document.getElementById('inputColor').value,
+                hat: document.getElementById('inputHat').value
+            };
         }
 
         function kickPlayer(targetPeerId) {
@@ -308,6 +301,11 @@
             
             const pList = Object.values(players);
             countEl.innerText = pList.length;
+
+            if (pList.length === 0) {
+                listEl.innerHTML = '<div style="font-size:0.75rem; color:#64748b; text-align:center;">กด "สร้างห้อง" หรือ "จอยห้อง" เพื่อเริ่ม</div>';
+                return;
+            }
 
             let html = '';
             pList.forEach(p => {
@@ -359,54 +357,50 @@
             houseGroup.position.z = Math.sin(angle) * radius;
         }
 
-        // 🌐 4. PEERJS INITIALIZATION WITH CUSTOM ROOM CODE
-        const statusText = document.getElementById('statusText');
-        const btnStartGame = document.getElementById('btnStartGame');
+        // 🌐 4. ON-DEMAND PEERJS CONNECTIONS (กดปุ่มแล้วค่อยต่อ ไม่เชื่อมอัตโนมัติบนหน้าโหลด)
+        function createHostRoom() {
+            const code = document.getElementById('hostRoomCode').value.trim();
+            if (code.length !== 4) return alert('กรุณากรอกรหัสห้อง 4 หลักครับ');
 
-        // สุ่มรหัสห้องเริ่มต้น 4 หลัก
-        let initialCode = Math.floor(1000 + Math.random() * 9000).toString();
-        document.getElementById('hostRoomCode').value = initialCode;
-
-        function initHostPeer(code) {
             if (peer) peer.destroy();
 
             isHost = true;
-            const fullPeerId = `delivery-royale-4p-${code}`;
+            statusText.innerText = '⏳ กำลังสร้างห้องออนไลน์...';
+            statusText.style.color = '#f59e0b';
+
+            const fullPeerId = `dr-4p-v2-${code}`;
             peer = new Peer(fullPeerId);
 
             peer.on('open', (id) => {
                 myId = id;
-                statusText.innerText = `🟢 เปิดห้องรหัส [${code}] สำเร็จ! (สูงสุด 4 คน)`;
+                statusText.innerText = `🟢 เปิดห้องรหัส [${code}] สำเร็จ! รอเพื่อนเข้า...`;
                 statusText.style.color = '#34d399';
                 btnStartGame.disabled = false;
 
                 players = {};
-                players[myId] = { id: myId, x: 0, z: 4, score: 0, profile: myProfile };
+                players[myId] = { id: myId, x: 0, z: 4, score: 0, profile: getMyProfile() };
                 renderLobbyList();
             });
 
             peer.on('error', (err) => {
                 if (err.type === 'unavailable-id') {
-                    statusText.innerText = '❌ รหัสห้องนี้มีคนใช้อยู่แล้ว กรุณาเปลี่ยนเลข!';
+                    statusText.innerText = '❌ รหัสห้องนี้มีคนใช้อยู่แล้ว ลองเปลี่ยนเลข 4 หลักครับ';
                 } else {
-                    statusText.innerText = `❌ ข้อผิดพลาด: ${err.type}`;
+                    statusText.innerText = `❌ เกิดข้อผิดพลาด: ${err.type}`;
                 }
                 statusText.style.color = '#f87171';
             });
 
-            // รับคนเข้าห้อง
             peer.on('connection', (conn) => {
                 if (!isHost) return;
                 
                 conn.on('open', () => {
                     if (Object.keys(connections).length + 1 >= MAX_PLAYERS) {
-                        conn.send({ type: 'ERROR', msg: 'ห้องเต็มแล้ว! (รับได้สูงสุด 4 คน)' });
+                        conn.send({ type: 'ERROR', msg: 'ห้องเต็มแล้ว! (สูงสุด 4 คน)' });
                         conn.close();
                         return;
                     }
-
                     connections[conn.peer] = conn;
-                    statusText.innerText = `🟢 มีผู้เล่นเข้าห้อง (${Object.keys(connections).length + 1}/${MAX_PLAYERS} คน)`;
                 });
 
                 conn.on('data', (data) => {
@@ -424,6 +418,15 @@
                         
                         renderLobbyList();
                         broadcastWorldState();
-                    } else if (data.type === 'UPDATE_PROFILE') {
+                    } else if (data.type === 'PLAYER_MOVE') {
                         if (players[conn.peer]) {
-                            players[conn.peer].pro
+                            players[conn.peer].x = data.x;
+                            players[conn.peer].z = data.z;
+                        }
+                    } else if (data.type === 'USE_ITEM') {
+                        handleItemUse(conn.peer);
+                    }
+                });
+
+                conn.on('close', () => {
+                    removePlayer(conn.
