@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Delivery Royale 3D - Fixed Drop Bug</title>
+    <!-- Three.js 3D Engine & PeerJS -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; touch-action: none; user-select: none; }
+        body { background: #0b0f19; color: #fff; font-family: system-ui, -apple-system, sans-serif; overflow: hidden; }
+        
+        /* LOBBY & MENU OVERLAY */
+        #lobbyOverlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(11, 15, 25, 0.95); backdrop-filter: blur(8px);
+            z-index: 100; display: flex; flex-direction: column; align-items: center; justify-content: center;
+            padding: 16px; overflow-y: auto;
+        }
+        .menu-card {
+            background: #161b22; border: 1px solid #30363d; border-radius: 16px;
+            padding: 20px; width: 100%; max-width: 380px; box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            display: flex; flex-direction: column; gap: 12px;
+        }
+        .menu-title { font-size: 1.4rem; font-weight: 900; color: #38bdf8; text-align: center; text-transform: uppercase; letter-spacing: 1px; }
+        
+        .form-row { display: flex; flex-direction: column; gap: 4px; }
+        .form-row label { font-size: 0.75rem; color: #94a3b8; font-weight: bold; }
+        .form-row input, .form-row select {
+            background: #0d1117; border: 1px solid #30363d; padding: 10px; border-radius: 8px;
+            color: #fff; font-weight: bold; font-size: 0.9rem; outline: none;
+        }
+        .form-row input[type="color"] { height: 42px; cursor: pointer; padding: 2px; }
+        
+        .room-box { background: #0d1117; border: 1px dashed #38bdf8; border-radius: 10px; padding: 10px; text-align: center; }
+        .btn-action {
+            background: #2563eb; color: #fff; border: none; padding: 12px; border-radius: 10px;
+            font-weight: bold; font-size: 1rem; cursor: pointer; transition: 0.2s;
+        }
+        .btn-action:disabled { background: #334155; color: #64748b; cursor: not-allowed; }
+        
+        /* IN-GAME HUD OVERLAY */
+        #hudOverlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none; display: none; flex-direction: column;
+            justify-content: space-between; padding: 12px; z-index: 10;
+        }
+        .interactive { pointer-events: auto; }
+        
+        .score-board {
+            background: rgba(15, 23, 42, 0.85); backdrop-filter: blur(4px);
+            padding: 8px 16px; border-radius: 20px; border: 1px solid #38bdf8;
+            display: flex; gap: 20px; font-weight: bold; font-size: 0.9rem; align-self: center;
+        }
+        
+        /* D-Pad Touch Controls */
+        .controls-zone { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 10px; }
+        .dpad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; width: 140px; height: 140px; }
+        .btn-pad { background: rgba(51, 65, 85, 0.7); color: #fff; border: 1px solid #64748b; border-radius: 10px; font-size: 1.2rem; display: flex; justify-content: center; align-items: center; }
+        .btn-pad:active { background: #38bdf8; }
+        .btn-item { background: #ef4444; color: #fff; border: 2px solid #f87171; width: 75px; height: 75px; border-radius: 50%; font-weight: bold; font-size: 0.85rem; box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4); }
+    </style>
+</head>
+<body>
+
+    <!-- 🎨 1. หน้า UI LOBBY & MENU -->
+    <div id="lobbyOverlay">
+        <div class="menu-card">
+            <div class="menu-title">🚚 Delivery Royale 3D</div>
+            
+            <div class="form-row">
+                <label>👤 ชื่อพนักงานส่งของ:</label>
+                <input type="text" id="inputName" value="Driver_01" maxlength="12">
+            </div>
+
+            <div class="form-row">
+                <label>🎨 สีชุดยูนิฟอร์ม:</label>
+                <input type="color" id="inputColor" value="#38bdf8">
+            </div>
+
+            <div class="form-row">
+                <label>👑 หมวกตกแต่ง (3D Accessory):</label>
+                <select id="inputHat">
+                    <option value="none">ไม่ใส่หมวก</option>
+                    <option value="crown">👑 มงกุฎทอง</option>
+                    <option value="cap">🧢 หมวกแก๊ป</option>
+                    <option value="horns">😈 เขาปีศาจ</option>
+                </select>
+            </div>
+
+            <div class="room-box">
+                <div style="font-size:0.75rem; color:#94a3b8;">รหัสห้องของคุณ (4 หลัก):</div>
+                <div id="myRoomCode" style="font-size:1.3rem; font-weight:900; color:#38bdf8;">....</div>
+            </div>
+
+            <div class="form-row">
+                <label>🔑 เข้าร่วมห้องเพื่อน:</label>
+                <div style="display:flex; gap:6px;">
+                    <input type="number" id="inputJoinCode" placeholder="กรอกรหัส 4 หลัก" style="flex:1;">
+                    <button style="background:#0284c7; color:#fff; border:none; padding:0 12px; border-radius:8px; font-weight:bold;" onclick="joinRoom()">จอยห้อง 🚀</button>
+                </div>
+            </div>
+
+            <div id="statusText" style="font-size:0.75rem; color:#f59e0b; text-align:center; font-weight:bold;">⏳ กำลังเชื่อมต่อระบบออนไลน์...</div>
+
+            <button class="btn-action" id="btnStartGame" onclick="startGame()" disabled>🚀 เข้าสู่เกาะลอยฟ้า</button>
+        </div>
+    </div>
+
+    <!-- 🎮 2. IN-GAME HUD OVERLAY -->
+    <div id="hudOverlay">
+        <div class="score-board">
+            <span style="color:#38bdf8;" id="myLabelName">คุณ: <span id="myScore">0</span></span>
+            <span style="color:#f43f5e;" id="otherLabelName">คู่แข่ง: <span id="otherScore">0</span></span>
+        </div>
+
+        <div class="controls-zone">
+            <div class="dpad interactive">
+                <div></div><button class="btn-pad" ontouchstart="startMove(0, -0.3)" ontouchend="stopMove()">⬆️</button><div></div>
+                <button class="btn-pad" ontouchstart="startMove(-0.3, 0)" ontouchend="stopMove()">⬅️</button><div></div><button class="btn-pad" ontouchstart="startMove(0.3, 0)" ontouchend="stopMove()">➡️</button>
+                <div></div><button class="btn-pad" ontouchstart="startMove(0, 0.3)" ontouchend="stopMove()">⬇️</button><div></div>
+            </div>
+            <button class="btn-item interactive" onclick="useItem()">🔫 ยิงป่วน</button>
+        </div>
+    </div>
+
+    <script>
+        // 🎮 1. SETUP THREE.JS ENGINE
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x0f172a);
+
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 22, 22);
+        camera.lookAt(0, 0, 0);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        scene.add(new THREE.AmbientLight(0xffffff, 0.75));
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.6);
+        dirLight.position.set(10, 20, 10);
+        scene.add(dirLight);
+
+        // 🏝️ เกาะลอยฟ้า
+        const island = new THREE.Mesh(
+            new THREE.CylinderGeometry(12, 10, 2, 32),
+            new THREE.MeshLambertMaterial({ color: 0x1e293b })
+        );
+        island.position.y = -1;
+        scene.add(island);
+
+        // 🏠 บ้านเป้าหมายส่งของ
+        const houseGroup = new THREE.Group();
+        const houseBody = new THREE.Mesh(new THREE.BoxGeometry(2, 2, 2), new THREE.MeshLambertMaterial({ color: 0xf59e0b }));
+        const roof = new THREE.Mesh(new THREE.ConeGeometry(1.8, 1.2, 4), new THREE.MeshLambertMaterial({ color: 0xef4444 }));
+        roof.position.y = 1.6; roof.rotation.y = Math.PI / 4;
+        houseGroup.add(houseBody, roof);
+        houseGroup.position.set(5, 1, 0);
+        scene.add(houseGroup);
+
+        // 📦 พัสดุ
+        const packageMesh = new THREE.Mesh(
+            new THREE.BoxGeometry(1, 1, 1),
+            new THREE.MeshLambertMaterial({ color: 0xfacc15 })
+        );
+        packageMesh.position.set(0, 0.5, 0);
+        scene.add(packageMesh);
+
+        // 👑 2. DYNAMIC 3D CHARACTER BUILDER
+        function createNameTag(text) {
+            const canvas = document.createElement('canvas');
+            canvas.width = 256; canvas.height = 64;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+            ctx.fillRect(10, 10, 236, 44);
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 22px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText(text, 128, 40);
+            
+            const texture = new THREE.CanvasTexture(canvas);
+            const spriteMat = new THREE.SpriteMaterial({ map: texture });
+            const sprite = new THREE.Sprite(spriteMat);
+            sprite.scale.set(4, 1, 1);
+            sprite.position.y = 2.8;
+            return sprite;
+        }
+
+        function buildCharacterMesh(group, profile) {
+            while(group.children.length > 0) group.remove(group.children[0]);
+
+            const body = new THREE.Mesh(
+                new THREE.BoxGeometry(1.2, 1.8, 1.2),
+                new THREE.MeshLambertMaterial({ color: profile.color || '#38bdf8' })
+            );
+            body.position.y = 0.9;
+            group.add(body);
+
+            if (profile.hat === 'crown') {
+                const crown = new THREE.Mesh(new THREE.ConeGeometry(0.6, 0.6, 5), new THREE.MeshLambertMaterial({ color: 0xf59e0b }));
+                crown.position.y = 2.1; group.add(crown);
+            } else if (profile.hat === 'cap') {
+                const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.7, 0.3, 16), new THREE.MeshLambertMaterial({ color: 0xef4444 }));
+                cap.position.y = 2.0; group.add(cap);
+            } else if (profile.hat === 'horns') {
+                const h1 = new THREE.Mesh(new THREE.ConeGeometry(0.2, 0.6, 8), new THREE.MeshLambertMaterial({ color: 0xdc2626 }));
+                h1.position.set(-0.4, 2.0, 0); h1.rotation.z = -0.3;
+                const h2 = h1.clone(); h2.position.set(0.4, 2.0, 0); h2.rotation.z = 0.3;
+                group.add(h1, h2);
+            }
+
+            group.add(createNameTag(profile.name || "Player"));
+        }
+
+        const myPlayerGroup = new THREE.Group();
+        const otherPlayerGroup = new THREE.Group();
+        scene.add(myPlayerGroup, otherPlayerGroup);
+
+        // 🕹️ 3. GAME STATE & COOLDOWN SYSTEM
+        let isHost = true;
+        let moveVec = { x: 0, z: 0 };
+        let myScore = 0, otherScore = 0;
+
+        let packageHolder = null; // null, 'host', 'guest'
+        let pickupCooldown = 0; // หน่วงเวลาเก็บกล่อง 0.5 วินาทีเมื่อโดนยิงหลุดมือ
+
+        let myProfile = { name: "Driver_01", color: "#38bdf8", hat: "none" };
+        let otherProfile = { name: "Waiting...", color: "#f43f5e", hat: "none" };
+
+        function getMyRole() { return isHost ? 'host' : 'guest'; }
+        function getOtherRole() { return isHost ? 'guest' : 'host'; }
+
+        function startMove(x, z) { moveVec = { x, z }; }
+        function stopMove() { moveVec = { x: 0, z: 0 }; }
+
+        // 🔫 ยิงป่วน: ทำให้กล่องกระเด็นหลุดออกจากมือ
+        function useItem() {
+            if (packageHolder === getOtherRole()) {
+                const dist = myPlayerGroup.position.distanceTo(otherPlayerGroup.position);
+                if (dist < 8) {
+                    packageHolder = null;
+                    pickupCooldown = Date.now() + 500; // ติดคูลดาวน์ 0.5 วินาทีก่อนเก็บใหม่ได้
+                    
+                    // สุ่มทิศทางให้กล่องกระเด็นออกจากคนโดนยิง
+                    const dropX = Math.max(-8, Math.min(8, otherPlayerGroup.position.x + (Math.random() > 0.5 ? 1.5 : -1.5)));
+                    const dropZ = Math.max(-8, Math.min(8, otherPlayerGroup.position.z + (Math.random() > 0.5 ? 1.5 : -1.5)));
+                    
+                    packageMesh.position.set(dropX, 0.5, dropZ);
+                    syncState();
+                }
+            }
+        }
+
+        function relocatHouse() {
+            const angle = Math.random() * Math.PI * 2;
+            const radius = Math.random() * 7 + 2;
+            houseGroup.position.x = Math.cos(angle) * radius;
+            houseGroup.position.z = Math.sin(angle) * radius;
+        }
+
+        // 🌐 4. P2P NETWORK SETUP (WITH PKG POSITION SYNC)
+        const myShortCode = Math.floor(1000 + Math.random() * 9000).toString();
+        const fullPeerId = `delivery-royale-3d-${myShortCode}`;
+        let peer = new Peer(fullPeerId);
+        let conn = null;
+
+        const statusText = document.getElementById('statusText');
+        const btnStartGame = document.getElementById('btnStartGame');
+
+        peer.on('open', () => {
+            document.getElementById('myRoomCode').innerText = myShortCode;
+            statusText.innerText = '🟢 พร้อมใช้งาน! แต่งตัวรอเพื่อนจอยห้องได้เลย';
+            statusText.style.color = '#34d399';
+            btnStartGame.disabled = false;
+        });
+
+        peer.on('connection', (c) => {
+            conn = c;
+            isHost = true;
+            setupP2P();
+        });
+
+        function joinRoom() {
+            const code = document.getElementById('inputJoinCode').value.trim();
+            if (code.length !== 4) return alert('กรุณากรอกรหัสห้อง 4 หลัก');
+            
+            isHost = false;
+            statusText.innerText = '⏳ กำลังเชื่อมต่อหาเพื่อน...';
+            conn = peer.connect(`delivery-royale-3d-${code}`);
+            setupP2P();
+        }
+
+        function setupP2P() {
+            conn.on('open', () => {
+                statusText.innerText = '✅ เชื่อมต่อสำเร็จ! กดปุ่มเข้าเล่นได้เลย';
+                statusText.style.color = '#38bdf8';
+                btnStartGame.disabled = false;
+                syncProfile();
+            });
+
+            conn.on('data', (data) => {
+                if (data.type === 'SYNC_PROFILE') {
+                    otherProfile = data.profile;
+                    buildCharacterMesh(otherPlayerGroup, otherProfile);
+                    document.getElementById('otherLabelName').innerHTML = `${otherProfile.name}: <span id="otherScore">${otherScore}</span>`;
+                } else if (data.type === 'GAME_STATE') {
+                    otherPlayerGroup.position.x = data.x;
+                    otherPlayerGroup.position.z = data.z;
+                    otherScore = data.score;
+                    packageHolder = data.pkgHolder;
+                    
+                    // 📌 ซิงก์พิกัดกล่องตกบนพื้นข้ามเครื่อง
+                    if (packageHolder === null && data.pkgPos) {
+                        packageMesh.position.set(data.pkgPos.x, data.pkgPos.y, data.pkgPos.z);
+                    }
+                    
+                    if (data.housePos) houseGroup.position.copy(data.housePos);
+                    document.getElementById('otherScore').innerText = otherScore;
+                }
+            });
+        }
+
+        function syncProfile() {
+            if (conn && conn.open) {
+                conn.send({ type: 'SYNC_PROFILE', profile: myProfile });
+            }
+        }
+
+        function syncState() {
+            if (conn && conn.open) {
+                conn.send({
+                    type: 'GAME_STATE',
+                    x: myPlayerGroup.position.x,
+                    z: myPlayerGroup.position.z,
+                    score: myScore,
+                    pkgHolder: packageHolder,
+                    pkgPos: { x: packageMesh.position.x, y: packageMesh.position.y, z: packageMesh.position.z },
+                    housePos: houseGroup.position
+                });
+            }
+        }
+
+        // 🚀 5. START GAME
+        function startGame() {
+            myProfile.name = document.getElementById('inputName').value.trim() || "Driver";
+            myProfile.color = document.getElementById('inputColor').value;
+            myProfile.hat = document.getElementById('inputHat').value;
+
+            if (isHost) {
+                myPlayerGroup.position.set(-5, 0, 0);
+                otherPlayerGroup.position.set(5, 0, 0);
+            } else {
+                myPlayerGroup.position.set(5, 0, 0);
+                otherPlayerGroup.position.set(-5, 0, 0);
+            }
+
+            buildCharacterMesh(myPlayerGroup, myProfile);
+            buildCharacterMesh(otherPlayerGroup, otherProfile);
+
+            document.getElementById('myLabelName').innerHTML = `${myProfile.name}: <span id="myScore">0</span>`;
+
+            document.getElementById('lobbyOverlay').style.display = 'none';
+            document.getElementById('hudOverlay').style.display = 'flex';
+
+            syncProfile();
+            syncState();
+        }
+
+        // 🔄 6. GAME LOOP (FIXED DROP & PICKUP)
+        function update() {
+            if (moveVec.x !== 0 || moveVec.z !== 0) {
+                myPlayerGroup.position.x = Math.max(-9, Math.min(9, myPlayerGroup.position.x + moveVec.x));
+                myPlayerGroup.position.z = Math.max(-9, Math.min(9, myPlayerGroup.position.z + moveVec.z));
+                syncState();
+            }
+
+            // เช็กการเก็บกล่องบนพื้น (เมื่อไม่มีใครถือ + หมดคูลดาวน์)
+            if (packageHolder === null && Date.now() > pickupCooldown) {
+                if (myPlayerGroup.position.distanceTo(packageMesh.position) < 1.8) {
+                    packageHolder = getMyRole();
+                    syncState();
+                }
+            }
+
+            // แสดงผลกล่องตามสถานะถือ
+            if (packageHolder === getMyRole()) {
+                packageMesh.position.set(myPlayerGroup.position.x, 2.8, myPlayerGroup.position.z);
+                
+                if (myPlayerGroup.position.distanceTo(houseGroup.position) < 2.0) {
+                    myScore += 100;
+                    document.getElementById('myScore').innerText = myScore;
+                    packageHolder = null;
+                    packageMesh.position.set(0, 0.5, 0);
+                    relocatHouse();
+                    syncState();
+                }
+            } else if (packageHolder === getOtherRole()) {
+                packageMesh.position.set(otherPlayerGroup.position.x, 2.8, otherPlayerGroup.position.z);
+            }
+
+            renderer.render(scene, camera);
+            requestAnimationFrame(update);
+        }
+
+        requestAnimationFrame(update);
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+                                                                                                     </html>
+                                                                                                     
